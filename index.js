@@ -28,10 +28,8 @@ app.post("/upload", upload.single('product'), (req, res) => {
   })
 })
 
-
 // Route for Images folder
 app.use('/images', express.static('upload/images'));
-
 
 // MiddleWare to fetch user from token
 const fetchuser = async (req, res, next) => {
@@ -48,7 +46,6 @@ const fetchuser = async (req, res, next) => {
   }
 };
 
-
 // Schema for creating user model
 const Users = mongoose.model("Users", {
   name: { type: String },
@@ -57,7 +54,6 @@ const Users = mongoose.model("Users", {
   cartData: { type: Object },
   date: { type: Date, default: Date.now() },
 });
-
 
 // Schema for creating Product
 const Product = mongoose.model("Product", {
