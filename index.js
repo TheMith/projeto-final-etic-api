@@ -4,11 +4,6 @@ import jwt from "jsonwebtoken";
 import multer from "multer";
 import path from "path";
 import cors from "cors";
-import fs from "fs";
-import axios from "axios";
-import dotenv from "dotenv";
-
-dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -23,40 +18,18 @@ mongoose.connect(process.env.MONGODB_URI);
 const storage = multer.diskStorage({
   destination: './upload/images',
   filename: (req, file, cb) => {
-    cb(null, `${file.fieldname}_${Date.now()}${path.extname(file.originalname)}`);
+    cb(null, ${file.fieldname}_${Date.now()}${path.extname(file.originalname)});
   }
 });
 
 const upload = multer({ storage });
 
 // Endpoint for image upload
-app.post("/upload", upload.single('product'), async (req, res) => {
-  try {
-    const filePath = `./upload/images/${req.file.filename}`;
-    const fileContent = fs.readFileSync(filePath, { encoding: 'base64' });
-
-    const githubResponse = await axios.put(
-      `https://api.github.com/repos/${process.env.GITHUB_REPO}/upload/images/${req.file.filename}`,
-      {
-        message: `Add image ${req.file.filename}`,
-        content: fileContent,
-      },
-      {
-        headers: {
-          Authorization: `token ${process.env.GITHUB_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-
-    res.json({
-      success: 1,
-      image_url: githubResponse.data.content.html_url
-    });
-  } catch (error) {
-    console.error('Error uploading to GitHub:', error);
-    res.status(500).json({ success: 0, error: 'Failed to upload image to GitHub' });
-  }
+app.post("/upload", upload.single('product'), (req, res) => {
+  res.json({
+    success: 1,
+    image_url: /images/${req.file.filename}
+  });
 });
 
 // Route for Images folder
@@ -237,7 +210,7 @@ app.post("/removeproduct", async (req, res) => {
 // Starting Express Server
 app.listen(port, (error) => {
   if (!error) {
-    console.log(`Server Running on port ${port}`);
+    console.log(Server Running on port ${port});
   } else {
     console.log("Error: ", error);
   }
