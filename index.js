@@ -2,8 +2,9 @@ import express from "express";
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
 import multer from "multer";
-import path from "path";
 import cors from "cors";
+import Grid from "gridfs-stream";
+import { GridFsStorage } from "multer-gridfs-storage";
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -12,28 +13,54 @@ app.use(express.json());
 app.use(cors());
 
 // Database Connection With MongoDB
-mongoose.connect(process.env.MONGODB_URI);
-
-// Image Storage Engine
-const storage = multer.diskStorage({
-  destination: './upload/images',
-  filename: (req, file, cb) => {
-    cb(null, `${file.fieldname}_${Date.now()}${path.extname(file.originalname)}`);
-  }
+const mongoURI = process.env.MONGODB_URI;
+const conn = mongoose.createConnection(mongoURI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
 });
 
+let gfs;
+conn.once("open", () => {
+  // Initialize GridFS stream
+  gfs = Grid(conn.db, mongoose.mongo);
+  gfs.collection("uploads");
+});
+
+// Create storage engine
+const storage = new GridFsStorage({
+  url: mongoURI,
+  file: (req, file) => {
+    return {
+      filename: `${file.fieldname}_${Date.now()}${path.extname(file.originalname)}`,
+      bucketName: "uploads", // Bucket name should match GridFS collection
+    };
+  },
+});
 const upload = multer({ storage });
 
 // Endpoint for image upload
 app.post("/upload", upload.single('product'), (req, res) => {
   res.json({
     success: 1,
-    image_url: `/images/${req.file.filename}`
+    image_url: `/image/${req.file.filename}`,
   });
 });
 
-// Route for Images folder
-app.use('/images', express.static('upload/images'));
+// Route for getting an image by filename
+app.get("/image/:filename", async (req, res) => {
+  const file = await gfs.files.findOne({ filename: req.params.filename });
+  if (!file) {
+    return res.status(404).json({ success: 0, message: "File not found" });
+  }
+
+  // Check if the file is an image
+  if (file.contentType.startsWith("image/")) {
+    const readStream = gfs.createReadStream(file.filename);
+    readStream.pipe(res);
+  } else {
+    res.status(404).json({ success: 0, message: "Not an image" });
+  }
+});
 
 // Middleware to fetch user from token
 const fetchuser = async (req, res, next) => {
@@ -90,8 +117,8 @@ app.post('/login', async (req, res) => {
     if (passCompare) {
       const data = {
         user: {
-          id: user.id
-        }
+          id: user.id,
+        },
       };
       success = true;
       const token = jwt.sign(data, 'secret_ecom');
@@ -124,8 +151,8 @@ app.post('/signup', async (req, res) => {
   await user.save();
   const data = {
     user: {
-      id: user.id
-    }
+      id: user.id,
+    },
   };
   const token = jwt.sign(data, 'secret_ecom');
   success = true;
