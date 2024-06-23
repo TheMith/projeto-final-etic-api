@@ -38,22 +38,12 @@ const storage = new GridFsStorage({
 const upload = multer({ storage });
 
 // Endpoint for image upload
-app.post("/upload", upload.single('product'), (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: "No file uploaded" });
-    }
-    
-    res.json({
-      success: true,
-      image_url: `/images/${req.file.filename}`,
-    });
-  } catch (err) {
-    console.error("Error uploading file:", err);
-    res.status(500).json({ error: "Failed to upload file" });
-  }
+app.post("/upload", upload.single("product"), (req, res) => {
+  res.json({
+    success: true,
+    image_url: `/images/${req.file.filename}`,
+  });
 });
-
 
 // Route for serving images
 // Endpoint for serving images
