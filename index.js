@@ -46,17 +46,34 @@ app.post("/upload", upload.single("product"), (req, res) => {
 });
 
 // Route for serving images
-app.get("/images/:filename", (req, res) => {
+// Endpoint for serving images
+app.get("/images/:filename", async (req, res) => {
   const { filename } = req.params;
-  const readStream = conn.db.collection("uploads").findOne({ filename });
-  if (!readStream) {
-    return res.status(404).json({ error: "Image not found" });
+  
+  try {
+    const file = await conn.db.collection("uploads").findOne({ filename });
+    
+    if (!file) {
+      return res.status(404).json({ error: "Image not found" });
+    }
+
+    const readStream = conn.db.collection("uploads").find({ filename });
+
+    // Initiate the piping of the file data to the response
+    readStream.on('data', (chunk) => {
+      res.write(chunk);
+    });
+
+    readStream.on('end', () => {
+      res.end();
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
   }
-  const readable = new Readable();
-  readable._read = () => {}; // _read is required but no operation needed
-  readStream.pipe(readable);
-  readable.pipe(res);
 });
+
 
 // Middleware to fetch user from token
 const fetchuser = async (req, res, next) => {
