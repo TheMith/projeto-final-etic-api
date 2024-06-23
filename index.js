@@ -2,9 +2,10 @@ import express from "express";
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
 import multer from "multer";
+import path from "path";
 import cors from "cors";
-import Grid from "gridfs-stream";
 import { GridFsStorage } from "multer-gridfs-storage";
+import { Readable } from "stream";
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -13,67 +14,62 @@ app.use(express.json());
 app.use(cors());
 
 // Database Connection With MongoDB
-const mongoURI = process.env.MONGODB_URI;
-const conn = mongoose.createConnection(mongoURI, {
+mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 });
 
-let gfs;
+const conn = mongoose.connection;
 conn.once("open", () => {
-  // Initialize GridFS stream
-  gfs = Grid(conn.db, mongoose.mongo);
-  gfs.collection("uploads");
+  console.log("MongoDB connected");
 });
 
-// Create storage engine
+// Create a GridFS storage instance
 const storage = new GridFsStorage({
-  url: mongoURI,
+  url: process.env.MONGODB_URI,
   file: (req, file) => {
     return {
+      bucketName: "uploads", // Collection name in MongoDB
       filename: `${file.fieldname}_${Date.now()}${path.extname(file.originalname)}`,
-      bucketName: "uploads", // Bucket name should match GridFS collection
     };
   },
 });
+
 const upload = multer({ storage });
 
 // Endpoint for image upload
-app.post("/upload", upload.single('product'), (req, res) => {
+app.post("/upload", upload.single("product"), (req, res) => {
   res.json({
-    success: 1,
-    image_url: `/image/${req.file.filename}`,
+    success: true,
+    image_url: `/images/${req.file.filename}`,
   });
 });
 
-// Route for getting an image by filename
-app.get("/image/:filename", async (req, res) => {
-  const file = await gfs.files.findOne({ filename: req.params.filename });
-  if (!file) {
-    return res.status(404).json({ success: 0, message: "File not found" });
+// Route for serving images
+app.get("/images/:filename", (req, res) => {
+  const { filename } = req.params;
+  const readStream = conn.db.collection("uploads").findOne({ filename });
+  if (!readStream) {
+    return res.status(404).json({ error: "Image not found" });
   }
-
-  // Check if the file is an image
-  if (file.contentType.startsWith("image/")) {
-    const readStream = gfs.createReadStream(file.filename);
-    readStream.pipe(res);
-  } else {
-    res.status(404).json({ success: 0, message: "Not an image" });
-  }
+  const readable = new Readable();
+  readable._read = () => {}; // _read is required but no operation needed
+  readStream.pipe(readable);
+  readable.pipe(res);
 });
 
 // Middleware to fetch user from token
 const fetchuser = async (req, res, next) => {
   const token = req.header("auth-token");
   if (!token) {
-    return res.status(401).send({ errors: "Please authenticate using a valid token" });
+    return res.status(401).send({ error: "Please authenticate using a valid token" });
   }
   try {
     const data = jwt.verify(token, "secret_ecom");
     req.user = data.user;
     next();
   } catch (error) {
-    res.status(401).send({ errors: "Please authenticate using a valid token" });
+    res.status(401).send({ error: "Please authenticate using a valid token" });
   }
 };
 
@@ -109,7 +105,7 @@ app.get("/", (req, res) => {
 });
 
 // Endpoint for login
-app.post('/login', async (req, res) => {
+app.post("/login", async (req, res) => {
   let success = false;
   const user = await User.findOne({ email: req.body.email });
   if (user) {
@@ -121,22 +117,22 @@ app.post('/login', async (req, res) => {
         },
       };
       success = true;
-      const token = jwt.sign(data, 'secret_ecom');
+      const token = jwt.sign(data, "secret_ecom");
       res.json({ success, token });
     } else {
-      return res.status(400).json({ success, errors: "Please try with correct email/password" });
+      return res.status(400).json({ success, error: "Please try with correct email/password" });
     }
   } else {
-    return res.status(400).json({ success, errors: "Please try with correct email/password" });
+    return res.status(400).json({ success, error: "Please try with correct email/password" });
   }
 });
 
 // Endpoint for registration
-app.post('/signup', async (req, res) => {
+app.post("/signup", async (req, res) => {
   let success = false;
   const check = await User.findOne({ email: req.body.email });
   if (check) {
-    return res.status(400).json({ success, errors: "Existing user found with this email" });
+    return res.status(400).json({ success, error: "Existing user found with this email" });
   }
   const cart = {};
   for (let i = 0; i < 300; i++) {
@@ -154,7 +150,7 @@ app.post('/signup', async (req, res) => {
       id: user.id,
     },
   };
-  const token = jwt.sign(data, 'secret_ecom');
+  const token = jwt.sign(data, "secret_ecom");
   success = true;
   res.json({ success, token });
 });
@@ -188,7 +184,7 @@ app.post("/relatedproducts", async (req, res) => {
 });
 
 // Endpoint for saving the product in cart
-app.post('/addtocart', fetchuser, async (req, res) => {
+app.post("/addtocart", fetchuser, async (req, res) => {
   const userData = await User.findOne({ _id: req.user.id });
   userData.cartData[req.body.itemId] += 1;
   await User.findOneAndUpdate({ _id: req.user.id }, { cartData: userData.cartData });
@@ -196,7 +192,7 @@ app.post('/addtocart', fetchuser, async (req, res) => {
 });
 
 // Endpoint for removing the product in cart
-app.post('/removefromcart', fetchuser, async (req, res) => {
+app.post("/removefromcart", fetchuser, async (req, res) => {
   const userData = await User.findOne({ _id: req.user.id });
   if (userData.cartData[req.body.itemId] !== 0) {
     userData.cartData[req.body.itemId] -= 1;
@@ -206,7 +202,7 @@ app.post('/removefromcart', fetchuser, async (req, res) => {
 });
 
 // Endpoint for getting cart data of user
-app.post('/getcart', fetchuser, async (req, res) => {
+app.post("/getcart", fetchuser, async (req, res) => {
   const userData = await User.findOne({ _id: req.user.id });
   res.json(userData.cartData);
 });
@@ -235,10 +231,6 @@ app.post("/removeproduct", async (req, res) => {
 });
 
 // Starting Express Server
-app.listen(port, (error) => {
-  if (!error) {
-    console.log(`Server Running on port ${port}`);
-  } else {
-    console.log("Error: ", error);
-  }
+app.listen(port, () => {
+  console.log(`Server Running on port ${port}`);
 });
