@@ -18,8 +18,8 @@ To get started with the project, follow these steps:
 1. **Clone the repository:**
 
    ```
-   git clone https://github.com/yourusername/ecommerce-api.git
-   cd ecommerce-api
+   https://github.com/TheMith/projeto-final-etic-api.git
+   cd projeto-final-etic-api
    ```
 
 2. **Install the dependencies:**
